@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"image/jpeg"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -24,85 +24,141 @@ func main() {
 	// var cor = "013"
 	// filename := sqlVar.GetGtinCode(code, cor)
 
-	dirroots, _ := ioutil.ReadDir(path)
-	for _, rootFile := range dirroots {
+	if _, err := os.Stat("./encontrados/"); os.IsNotExist(err) {
+		err := os.Mkdir("./encontrados/", 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if _, err := os.Stat("./nao encontrados/"); os.IsNotExist(err) {
+		err := os.Mkdir("./nao encontrados/", 0755)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	dirroots, err := ioutil.ReadDir(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for ind, rootFile := range dirroots {
 		if !rootFile.IsDir() {
 			continue
 		}
-		folders, _ := ioutil.ReadDir(path + rootFile.Name())
+		folders, err := ioutil.ReadDir(path + "/" + rootFile.Name())
+		if err != nil {
+			log.Fatal(err)
+		}
 		CodeandColor := strings.Split(rootFile.Name(), "-")
 		filenames, err := sqlVar.GetGtinCode(CodeandColor[0], CodeandColor[1])
+		if err != nil {
+			dir(path+"/"+rootFile.Name(), "./nao encontrados/"+rootFile.Name())
+
+			if err2 := ioutil.WriteFile("./nao encontrados/"+rootFile.Name()+"/error.txt", []byte(err.Error()), 0766); err2 != nil {
+				log.Println(err2)
+			}
+			continue
+		}
+
+		err = os.Mkdir("./encontrados/"+rootFile.Name(), 0755)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
-		if len(filenames) == 0 {
-			fmt.Println("não encontrado")
-			continue
-		}
-		// if len(filenames) == 0 {
-		// 	err = os.Mkdir("./nao encontrado/"+rootFile.Name(), 0755)
-		// 	if err != nil {
-		// 		log.Fatal(err)
-		// 	}
-		// 	for _, photoFile := range folders {
-		// 		if photoFile.IsDir() || photoFile.Name() == "Thumbs.db" || photoFile.Name() == ".DS_Store" {
-		// 			continue
-		// 		}
-		// 		file, err := os.Open(path + rootFile.Name() + "/" + photoFile.Name())
-		// 		if err != nil {
-		// 			log.Println(err)
-		// 			continue
-		// 		}
-		// 		img, err := jpeg.Decode(file)
-		// 		if err != nil {
-		// 			log.Println(err)
-		// 			continue
-		// 		}
-		// 		for _, name := range photoFile.Name() {
-		// 			fmt.Println(name)
-		// 			dest2file, err := os.OpenFile("./nao encontrado/"+rootFile.Name()+"/"+photoFile.Name(), os.O_WRONLY, 0766)
-		// 			if err != nil {
-		// 				log.Println(err)
-		// 				continue
-		// 			}
-		// 			jpeg.Encode(dest2file, img, &jpeg.Options{})
-		// 		}
-		// 	}
-		// }
-		err = os.Mkdir("./encontrados/"+rootFile.Name(), 0755)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, photoFile := range folders {
+		for index, photoFile := range folders {
+
+			pfS := strings.Split(photoFile.Name(), ".")
+			term := pfS[len(pfS)-1]
+
 			if photoFile.IsDir() || photoFile.Name() == "Thumbs.db" || photoFile.Name() == ".DS_Store" {
 				continue
 			}
-			// for _, gtin := range filenames {
-			file, err := os.Open(path + rootFile.Name() + "/" + photoFile.Name())
+
+			file, err := os.Open(path + "/" + rootFile.Name() + "/" + photoFile.Name())
 			if err != nil {
-				log.Println(err)
+				log.Println("error opening photo", err)
 				continue
 			}
-			img, err := jpeg.Decode(file)
-			if err != nil {
-				log.Println(err)
-				continue
-			}
+			filebytes, _ := ioutil.ReadAll(file)
+			// img, err := jpeg.Decode(file)
+			// if err != nil {
+			// 	log.Println("error decoding photo", err)
+			// 	continue
+			// }
 
 			for _, gtin := range filenames {
-
-				destFile, err := os.OpenFile("./encontrados/"+rootFile.Name()+"/"+gtin+"-"+photoFile.Name(), os.O_WRONLY|os.O_CREATE, 0766)
+				destPath := fmt.Sprintf("%s/%s/%s-%d.%s", "./encontrados", rootFile.Name(), gtin, index+1, term)
+				destFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE, 0666)
 				if err != nil {
-					log.Println(err)
+					log.Println("error opening destination file", destPath, err)
 					continue
 				}
-				jpeg.Encode(destFile, img, &jpeg.Options{})
+				// if err := jpeg.Encode(destFile, img, &jpeg.Options{Quality: 100}); err != nil {
+				// 	log.Println("error encoding destination file", destPath, err)
+				// }
+				destFile.Write(filebytes)
+				// ioutil.Write(destPath, filebytes, 0666)
 			}
-			// }
-			// format := strings.Split(photoFile.Name(), ".")[1]
-			// newFileName := fmt.Sprintf("%s-%s-%d.%s", code, color, index, format)
+		}
+		fmt.Printf("%d/%d\n", ind+1, len(dirroots))
+	}
+}
 
+func dir(src string, dst string) error {
+	var err error
+	var fds []os.FileInfo
+	var srcinfo os.FileInfo
+
+	if srcinfo, err = os.Stat(src); err != nil {
+		return err
+	}
+
+	if err = os.MkdirAll(dst, srcinfo.Mode()); err != nil {
+		return err
+	}
+
+	if fds, err = ioutil.ReadDir(src); err != nil {
+		return err
+	}
+	for _, fd := range fds {
+		srcfp := strings.Join([]string{src, fd.Name()}, "/")
+		dstfp := strings.Join([]string{dst, fd.Name()}, "/")
+
+		if fd.IsDir() {
+			if err = dir(srcfp, dstfp); err != nil {
+				fmt.Println(err)
+			}
+		} else {
+			if err = file(srcfp, dstfp); err != nil {
+				fmt.Println(err)
+			}
 		}
 	}
+	return nil
+}
+
+func file(src, dst string) error {
+	var err error
+	var srcfd *os.File
+	var dstfd *os.File
+	var srcinfo os.FileInfo
+
+	if srcfd, err = os.Open(src); err != nil {
+		return err
+	}
+	defer srcfd.Close()
+
+	if dstfd, err = os.Create(dst); err != nil {
+		return err
+	}
+	defer dstfd.Close()
+
+	if _, err = io.Copy(dstfd, srcfd); err != nil {
+		return err
+	}
+	if srcinfo, err = os.Stat(src); err != nil {
+		return err
+	}
+	return os.Chmod(dst, srcinfo.Mode())
 }
