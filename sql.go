@@ -18,7 +18,7 @@ type sqlStruct struct {
 func (s *sqlStruct) init() error {
 	s.url = &url.URL{
 		Scheme: "sqlserver",
-		User:   url.UserPassword("felipe.restum", "z12xcvab@#$"),
+		User:   url.UserPassword("ti_consulta", "consulta"),
 		// Host:     "10.58.192.51:1433",
 		Host:     "179.183.30.186:3215",
 		RawQuery: url.Values{}.Encode(),

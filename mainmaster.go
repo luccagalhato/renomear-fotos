@@ -10,7 +10,7 @@ import (
 	//	"os"
 )
 
-const path = ("./1-Felipe")
+const path = "./renomear-auto"
 
 func main() {
 
@@ -51,6 +51,15 @@ func main() {
 			log.Fatal(err)
 		}
 		CodeandColor := strings.Split(rootFile.Name(), "-")
+		if len(CodeandColor) < 2 {
+			dir(path+"/"+rootFile.Name(), "./nao encontrados/"+rootFile.Name())
+
+			if err2 := ioutil.WriteFile("./nao encontrados/"+rootFile.Name()+"/error.txt", []byte("sem cor definida"), 0766); err2 != nil {
+				log.Println(err2)
+			}
+			continue
+		}
+
 		filenames, err := sqlVar.GetGtinCode(CodeandColor[0], CodeandColor[1])
 		if err != nil {
 			dir(path+"/"+rootFile.Name(), "./nao encontrados/"+rootFile.Name())
